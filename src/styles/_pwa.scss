@@ -1,0 +1,59 @@
+/*  Tryb standalone – po zainstalowaniu jako aplikacja */
+@media all and (display-mode: standalone) {
+  html, body {
+    height: 100%;
+    overflow-x: hidden;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    background: var(--bg);
+    color: var(--fg);
+    padding-top: env(safe-area-inset-top, 30px);
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+
+  .app {
+    box-shadow: none;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  .theme-toggle {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 10px) + 8px);
+    right: 12px;
+    font-size: 13px;
+    z-index: 999;
+  }
+}
+
+/*  Responsywność dla urządzeń mobilnych */
+@media (max-width: 480px) {
+  html, body {
+    width: 100%;
+    overflow-x: hidden;
+    padding: 20px 8px;
+    margin: 0;
+  }
+
+  .app {
+    max-width: 100%;
+    width: 100%;
+    padding: 28px 16px;
+    border-radius: 10px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    text-align: center;
+    max-width: 100%;
+    word-wrap: break-word;
+  }
+
+  .task-input input,
+  .task-input button {
+    font-size: 14px;
+  }
+}

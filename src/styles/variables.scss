@@ -1,0 +1,61 @@
+$radius:    16px;
+$radius-sm: 10px;
+$radius-lg: 22px;
+
+// Typography scale
+$text-xs:  11px;
+$text-sm:  12px;
+$text-md:  14px;
+$text-lg:  16px;
+$text-xl:  20px;
+$text-2xl: 24px;
+
+// Spacing grid (8px base)
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-8: 32px;
+
+/* Base */
+$base-white: #ffffff;
+$base-black: #07090f;
+
+$dark-bg:       #07090f;
+$dark-surface:  #0c0e17;
+$dark-fg:       #eceef8;
+$dark-card:     rgba(255, 255, 255, 0.04);
+$dark-accent:   #818cf8;    // indigo 400 — unikalny, premium, rozpoznawalny
+$dark-success:  #34d399;    // emerald 400
+$dark-muted:    #8892a8;
+$dark-warning:  #fbbf24;    // amber 400
+$dark-error:    #f87171;    // red 400
+$dark-gradient: linear-gradient(135deg, #818cf8 0%, #34d399 100%);
+$dark-border:   rgba(255, 255, 255, 0.075);
+
+$light-bg:       #f3f4fa;
+$light-surface:  #ffffff;
+$light-fg:       #0f172a;
+$light-card:     #ffffff;
+$light-accent:   #4f46e5;   // indigo 700 — pewny, korporacyjny
+$light-success:  #059669;   // emerald 600
+$light-muted:    #64748b;
+$light-warning:  #d97706;
+$light-error:    #dc2626;
+$light-gradient: linear-gradient(135deg, #4f46e5 0%, #059669 100%);
+$light-border:   rgba(0, 0, 0, 0.07);
+
+$accent-indigo:  #818cf8;
+$accent-emerald: #34d399;
+$accent-violet:  #a78bfa;
+$accent-pink:    #f472b6;
+$accent-amber:   #fbbf24;
+$accent-orange:  #fb923c;
+$accent-cyan:    #22d3ee;
+$accent-red:     #f87171;
+
+$bg-glow-1: radial-gradient(circle at 15% 25%, rgba(129, 140, 248, 0.12), transparent 65%);
+$bg-glow-2: radial-gradient(circle at 85% 80%, rgba(52, 211, 153, 0.08), transparent 65%);
+$bg-glow-3: radial-gradient(circle at 55% 5%,  rgba(167, 139, 250, 0.07), transparent 55%);

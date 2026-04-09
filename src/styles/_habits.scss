@@ -1,0 +1,522 @@
+// ─── Header ──────────────────────────────────────────────────────────────────
+
+.habits-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+
+  .page-title { margin-bottom: 0; }
+}
+
+.habits-add-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s;
+
+  &--open { background: rgba(129, 140, 248, 0.18); color: #818cf8; }
+
+  @media (hover: hover) {
+    &:hover { background: rgba(255, 255, 255, 0.13); }
+  }
+}
+
+body[data-theme="light"] .habits-add-btn {
+  background: rgba(0, 0, 0, 0.06);
+  &--open { background: rgba(99, 102, 241, 0.12); }
+}
+
+// ─── Today's progress ────────────────────────────────────────────────────────
+
+.habits-progress {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  transition: border-color 0.3s;
+
+  &--all-done {
+    border-color: rgba(52, 211, 153, 0.3);
+    background: rgba(52, 211, 153, 0.06);
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  &__label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+
+  &__fraction {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  &__track {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #818cf8, #34d399);
+  }
+}
+
+body[data-theme="light"] .habits-progress {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.07);
+
+  &__track { background: rgba(0, 0, 0, 0.08); }
+}
+
+// ─── Habit card ──────────────────────────────────────────────────────────────
+
+.habit-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  padding: 14px 14px 14px 14px;
+  margin-bottom: 10px;
+  position: relative;
+  transition: border-color 0.25s, background 0.25s;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10%;
+    bottom: 10%;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--habit-color, var(--accent));
+    opacity: 0.7;
+  }
+
+  &--done {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+
+    &::before { opacity: 1; }
+  }
+}
+
+body[data-theme="light"] .habit-card {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.07);
+
+  &--done {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+}
+
+// ─── Completion button ───────────────────────────────────────────────────────
+
+.habit-check {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 50%;
+  border: 2px solid var(--habit-color, var(--accent));
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  font-size: 20px;
+
+  &--done {
+    box-shadow: 0 0 12px var(--habit-color, var(--accent)), 0 0 4px var(--habit-color, var(--accent));
+  }
+
+  &__mark {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    display: block;
+  }
+
+  &__emoji {
+    line-height: 1;
+    display: block;
+  }
+}
+
+// ─── Card body ───────────────────────────────────────────────────────────────
+
+.habit-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.habit-card__top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.habit-card__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.habit-card__streak {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+
+body[data-theme="light"] .habit-card__streak {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+// ─── 7-day dots ──────────────────────────────────────────────────────────────
+
+.habit-card__dots-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.habit-dot-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.habit-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.2s, box-shadow 0.2s;
+  display: block;
+
+  &--filled {
+    background: var(--accent);
+  }
+
+  &--today {
+    outline: 1.5px solid rgba(255, 255, 255, 0.3);
+    outline-offset: 1px;
+  }
+}
+
+body[data-theme="light"] .habit-dot {
+  background: rgba(0, 0, 0, 0.1);
+
+  &--today { outline-color: rgba(0, 0, 0, 0.25); }
+}
+
+// ─── Delete button ───────────────────────────────────────────────────────────
+
+.habit-card__delete {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+
+  &:hover { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+}
+
+body[data-theme="light"] .habit-card__delete {
+  color: rgba(0, 0, 0, 0.2);
+}
+
+// ─── Empty state ─────────────────────────────────────────────────────────────
+
+.habits-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 10px;
+
+  &__icon {
+    font-size: 3.5rem;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  &__title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--fg);
+    margin: 0;
+  }
+
+  &__hint {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  &__cta {
+    margin-top: 16px;
+    padding: 12px 22px;
+    border-radius: 14px;
+    border: none;
+    background: rgba(129, 140, 248, 0.18);
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    color: #818cf8;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.18s;
+
+    &:hover { background: rgba(129, 140, 248, 0.26); }
+  }
+}
+
+// ─── Add habit form ──────────────────────────────────────────────────────────
+
+.add-habit-form {
+  margin-bottom: 16px;
+
+  &__inner {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  &__preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__preview-emoji {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    transition: background 0.2s;
+  }
+
+  &__name-input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 10px 14px;
+    color: var(--fg);
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 600;
+    outline: none;
+    transition: border-color 0.18s;
+
+    &::placeholder { color: var(--muted); font-weight: 400; }
+    &:focus { border-color: rgba(129, 140, 248, 0.5); }
+  }
+
+  &__section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: -8px;
+  }
+
+  &__freq {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  &__cancel {
+    flex: 1;
+    padding: 11px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover { background: rgba(255, 255, 255, 0.06); }
+  }
+
+  &__submit {
+    flex: 2;
+    padding: 11px;
+    border-radius: 12px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.2s;
+
+    &:disabled { opacity: 0.4; cursor: default; }
+  }
+}
+
+body[data-theme="light"] .add-habit-form__inner {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme="light"] .add-habit-form__name-input {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+// ─── Emoji picker ─────────────────────────────────────────────────────────────
+
+.emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+
+  @media (max-width: 360px) { grid-template-columns: repeat(6, 1fr); }
+
+  &__btn {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 18px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, border-color 0.15s, transform 0.12s;
+
+    &--active {
+      border-color: rgba(129, 140, 248, 0.6);
+      background: rgba(129, 140, 248, 0.15);
+      transform: scale(1.1);
+    }
+
+    &:not(&--active):hover { background: rgba(255, 255, 255, 0.1); }
+  }
+}
+
+body[data-theme="light"] .emoji-picker__btn {
+  background: rgba(0, 0, 0, 0.04);
+  &--active { background: rgba(99, 102, 241, 0.1); }
+}
+
+// ─── Color picker ────────────────────────────────────────────────────────────
+
+.color-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  &__swatch {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2.5px solid transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.15s, box-shadow 0.15s;
+
+    &--active {
+      border-color: #fff;
+      transform: scale(1.18);
+      box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.4);
+    }
+  }
+}
+
+body[data-theme="light"] .color-picker__swatch--active {
+  border-color: rgba(0, 0, 0, 0.6);
+}
+
+// ─── Frequency buttons ───────────────────────────────────────────────────────
+
+.freq-btn {
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+
+  &--active {
+    background: rgba(129, 140, 248, 0.1);
+  }
+}
+
+body[data-theme="light"] .freq-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+}
