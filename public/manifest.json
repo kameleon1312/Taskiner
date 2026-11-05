@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Taskiner",
   "short_name": "Taskiner",
-  "description": "Taskiner™ – Smart Productivity App built with React",
+  "description": "Taskiner™ – zadania, kalendarz, przypomnienia w tle i dziennik aktywności",
   "lang": "pl",
   "start_url": "/",
   "scope": "/",
@@ -40,6 +40,51 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "shortcuts": [
+    {
+      "name": "Kalendarz",
+      "short_name": "Kalendarz",
+      "description": "Plan dnia i agenda",
+      "url": "/calendar",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Dziennik aktywności",
+      "short_name": "Dziennik",
+      "description": "Historia działań",
+      "url": "/activity",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Focus",
+      "short_name": "Focus",
+      "description": "Sesja skupienia",
+      "url": "/focus",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
