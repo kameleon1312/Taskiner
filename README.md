@@ -72,10 +72,10 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Szymon-Pochopien/taskiner.git
+git clone https://github.com/kameleon1312/Taskiner.git
 
 # 2. Navigate to the project
-cd taskiner
+cd Taskiner
 
 # 3. Install dependencies
 npm install
