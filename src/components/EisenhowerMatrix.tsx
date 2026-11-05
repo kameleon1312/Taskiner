@@ -15,11 +15,12 @@ import {
 import { useTaskStore } from "../stores/useTaskStore";
 import { useUIStore }   from "../stores/useUIStore";
 import type { Task } from "../types";
+import { deadlineDue, formatDeadline } from "../utils/deadline";
 
 function isUrgentTask(task: Task): boolean {
   if (task.priority === "urgent") return true;
   if (!task.deadline) return false;
-  const diffDays = (new Date(task.deadline).getTime() - Date.now()) / 86400000;
+  const diffDays = (deadlineDue(task.deadline).getTime() - Date.now()) / 86400000;
   return diffDays <= 3;
 }
 
@@ -39,7 +40,7 @@ type QuadrantKey = "q1" | "q2" | "q3" | "q4";
 // Deadline within 24 h (or overdue) always forces Q1 — overrides manual placement
 function isDeadlineCritical(task: Task): boolean {
   if (!task.deadline) return false;
-  const diffMs = new Date(task.deadline).getTime() - Date.now();
+  const diffMs = deadlineDue(task.deadline).getTime() - Date.now();
   return diffMs <= 86_400_000; // ≤24 h or already past
 }
 
@@ -148,7 +149,7 @@ const DraggableTaskChip = React.memo(function DraggableTaskChip({
       </div>
       {task.deadline && (
         <span className="eisenhower__task-badge">
-          {new Date(task.deadline).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}
+          {formatDeadline(task.deadline)}
         </span>
       )}
       <span

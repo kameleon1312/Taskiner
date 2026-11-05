@@ -3,19 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import FocusAtmosphere    from "../components/FocusAtmosphere";
 import { useFocusAudio }  from "../hooks/useFocusAudio";
 import { useTaskStore }   from "../stores/useTaskStore";
-import { useFocusStore }  from "../stores/useFocusStore";
 import { useHabitStore }  from "../stores/useHabitStore";
+import { useUIStore }     from "../stores/useUIStore";
+import { playTone }       from "../notifications/sound";
+import { formatDeadline } from "../utils/deadline";
 import type { SoundMode } from "../hooks/useFocusAudio";
+import { useFocusTimerStore, FOCUS_MODES, getRemainingMs, todaysFocusCount, type FocusMode } from "../stores/useFocusTimerStore";
 
 const CIRCUMFERENCE = 2 * Math.PI * 45;
 
-const MODES = {
-  work:       { label: "Skupienie",      minutes: 25, color: "#818cf8" },
-  shortBreak: { label: "Krótka przerwa", minutes: 5,  color: "#34d399" },
-  longBreak:  { label: "Długa przerwa",  minutes: 15, color: "#c084fc" },
-} as const;
+const MODES = FOCUS_MODES;
 
-type Mode = keyof typeof MODES;
+type Mode = FocusMode;
 
 const TIPS: Record<Mode, string> = {
   work:       "💡 Usuń rozpraszacze i skup się na jednym zadaniu.",
@@ -31,68 +30,47 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 
 export default function FocusPage() {
-  const tasks      = useTaskStore((s) => s.tasks);
-  const habits     = useHabitStore((s) => s.habits);
-  const logSession = useFocusStore((s) => s.logSession);
+  const tasks  = useTaskStore((s) => s.tasks);
+  const habits = useHabitStore((s) => s.habits);
 
-  const [mode,           setMode]           = useState<Mode>("work");
-  const [secondsLeft,    setSecondsLeft]    = useState(MODES.work.minutes * 60);
-  const [running,        setRunning]        = useState(false);
-  const [sessions,       setSessions]       = useState(() => {
-    const n = parseInt(sessionStorage.getItem("focus-sessions") ?? "0", 10);
-    return isNaN(n) ? 0 : n;
-  });
+  // Timer lives in a persisted store → keeps running across pages, reloads and background
+  const mode            = useFocusTimerStore((s) => s.mode);
+  const endAt           = useFocusTimerStore((s) => s.endAt);
+  const remainingMs     = useFocusTimerStore((s) => s.remainingMs);
+  const selectedTaskId  = useFocusTimerStore((s) => s.selectedTaskId);
+  const selectedHabitId = useFocusTimerStore((s) => s.selectedHabitId);
+  const lastFinished    = useFocusTimerStore((s) => s.lastFinished);
+  const sessions        = useFocusTimerStore(todaysFocusCount);
+  const timer           = useFocusTimerStore.getState;
+  const running         = endAt !== null;
+
+  const [, forceTick]            = useState(0);
   const [atmosphereOpen, setAtmosphereOpen] = useState(false);
   const [soundMode,      setSoundMode]      = useState<SoundMode>("off");
   const [justDone,       setJustDone]       = useState(false);
-  const [selectedTaskId,  setSelectedTaskId]  = useState<number | null>(null);
-  const [selectedHabitId, setSelectedHabitId] = useState<number | null>(null);
-  const [pickerOpen,      setPickerOpen]      = useState(false);
+  const [finishedMode,   setFinishedMode]   = useState<Mode>("work");
+  const [pickerOpen,     setPickerOpen]     = useState(false);
 
-  useFocusAudio(soundMode);
+  useFocusAudio(running ? soundMode : "off");
 
-  const intervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
-  const justDoneTimerRef= useRef<ReturnType<typeof setTimeout> | null>(null);
-  const beepCtxRef      = useRef<AudioContext | null>(null);
-  const atmHistRef      = useRef(false);
-  const accSecondsRef   = useRef(0);
-  const selectedTaskRef = useRef<number | null>(null);
-  const selectedHabitRef= useRef<number | null>(null);
+  const justDoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const atmHistRef       = useRef(false);
+  const mountedAt        = useRef(Date.now());
 
-  useEffect(() => { selectedTaskRef.current  = selectedTaskId;  }, [selectedTaskId]);
-  useEffect(() => { selectedHabitRef.current = selectedHabitId; }, [selectedHabitId]);
-  useEffect(() => { sessionStorage.setItem("focus-sessions", String(sessions)); }, [sessions]);
+  // Repaint 4×/s while running (display only — the time source is the wall clock)
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => forceTick((n) => n + 1), 250);
+    return () => clearInterval(t);
+  }, [running]);
 
-  const activeTasks  = tasks.filter((t) => !t.completed);
+  const activeTasks   = tasks.filter((t) => !t.completed);
   const selectedTask  = selectedTaskId  ? tasks.find((t) => t.id === selectedTaskId)   : null;
   const selectedHabit = selectedHabitId ? habits.find((h) => h.id === selectedHabitId) : null;
 
-  const selectTask = (id: number) => { setSelectedTaskId(id); setSelectedHabitId(null); setPickerOpen(false); };
-  const selectHabit= (id: number) => { setSelectedHabitId(id); setSelectedTaskId(null); setPickerOpen(false); };
-  const clearSelection = () => { setSelectedTaskId(null); setSelectedHabitId(null); };
-
-  // ─── Session logging ──────────────────────────────────────────────────────
-
-  const flushSession = useCallback((completed: boolean) => {
-    if (accSecondsRef.current < 60) {
-      accSecondsRef.current = 0;
-      return;
-    }
-    const mins = Math.round(accSecondsRef.current / 60);
-    const tid  = selectedTaskRef.current;
-    const hid  = selectedHabitRef.current;
-    const task  = tid ? tasks.find((t) => t.id === tid)   : null;
-    const habit = hid ? habits.find((h) => h.id === hid)  : null;
-    logSession({
-      taskId:     tid,
-      taskText:   task?.text ?? habit?.name ?? null,
-      categoryId: task?.categoryId ?? null,
-      startedAt:  new Date().toISOString(),
-      minutes:    mins,
-      completed,
-    });
-    accSecondsRef.current = 0;
-  }, [logSession, tasks, habits]);
+  const selectTask  = (id: number) => { timer().select(id, null); setPickerOpen(false); };
+  const selectHabit = (id: number) => { timer().select(null, id); setPickerOpen(false); };
+  const clearSelection = () => timer().select(null, null);
 
   // ─── Atmosphere history ────────────────────────────────────────────────────
 
@@ -106,7 +84,7 @@ export default function FocusPage() {
 
   useEffect(() => {
     if (atmosphereOpen) {
-      history.pushState({ focusAtm: true }, "");
+      history.pushState({ ...(history.state ?? {}), focusAtm: true }, "");
       atmHistRef.current = true;
       document.body.classList.add("atmosphere-open");
     } else {
@@ -121,91 +99,51 @@ export default function FocusPage() {
     return () => window.removeEventListener("popstate", handlePop);
   }, []);
 
+  useEffect(() => () => { if (justDoneTimerRef.current) clearTimeout(justDoneTimerRef.current); }, []);
+
+  // ─── Completion feedback (the engine in App calls finish()) ───────────────
   useEffect(() => {
-    return () => {
-      beepCtxRef.current?.close();
-      if (justDoneTimerRef.current) clearTimeout(justDoneTimerRef.current);
-    };
-  }, []);
+    if (!lastFinished || lastFinished.at < mountedAt.current - 5_000) return;
+    setFinishedMode(lastFinished.mode);
+    exitAtmosphere();
+    setJustDone(true);
+    navigator.vibrate?.([100, 80, 100, 80, 200]);
+    // Reminders off → still give an audible cue for the finished session
+    const ui = useUIStore.getState();
+    if (!ui.notificationsEnabled || !ui.focusAlerts) playTone(ui.soundId, ui.soundVolume);
+    justDoneTimerRef.current = setTimeout(() => setJustDone(false), 3500);
+  }, [lastFinished, exitAtmosphere]);
 
   // ─── Timer ────────────────────────────────────────────────────────────────
 
   const totalSeconds = MODES[mode].minutes * 60;
-  const progress     = secondsLeft / totalSeconds;
+  const secondsLeft  = Math.ceil(getRemainingMs({ endAt, remainingMs }) / 1000);
+  const progress     = Math.max(0, Math.min(1, secondsLeft / totalSeconds));
   const dashOffset   = CIRCUMFERENCE * (1 - progress);
 
-  const playBeep = useCallback((freq = 880) => {
-    try {
-      if (!beepCtxRef.current || beepCtxRef.current.state === "closed") {
-        beepCtxRef.current = new AudioContext();
-      }
-      const ctx  = beepCtxRef.current;
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 1.2);
-    } catch (_) {}
-  }, []);
-
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        if (mode === "work") accSecondsRef.current += 1;
-        setSecondsLeft((s) => {
-          if (s <= 1) {
-            clearInterval(intervalRef.current!);
-            if (mode === "work") {
-              flushSession(true);
-              setSessions((n) => n + 1);
-            }
-            setRunning(false);
-            exitAtmosphere();
-            setJustDone(true);
-            justDoneTimerRef.current = setTimeout(() => setJustDone(false), 3500);
-            navigator.vibrate?.([100, 80, 100, 80, 200]);
-            playBeep(mode === "work" ? 660 : 440);
-            return 0;
-          }
-          return s - 1;
-        });
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, mode, playBeep, flushSession, exitAtmosphere]);
-
   const switchMode = (m: Mode) => {
-    if (mode === "work") flushSession(false);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setRunning(false);
+    timer().switchMode(m);
     exitAtmosphere();
-    setMode(m);
-    setSecondsLeft(MODES[m].minutes * 60);
   };
 
-  const reset = () => {
-    if (mode === "work") flushSession(false);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    setRunning(false);
-    setSecondsLeft(MODES[mode].minutes * 60);
-  };
+  const reset = () => timer().reset();
 
   const handlePlayPause = () => {
-    const next = !running;
-    setRunning(next);
-    if (next) setAtmosphereOpen(true);
-    navigator.vibrate?.(next ? 8 : 4);
+    if (running) timer().pause();
+    else { timer().start(); setAtmosphereOpen(true); }
+    navigator.vibrate?.(running ? 4 : 8);
   };
 
   const mins    = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
   const secs    = String(secondsLeft % 60).padStart(2, "0");
   const timeStr = `${mins}:${secs}`;
+
+  useEffect(() => {
+    if (!running) return;
+    const prev = document.title;
+    document.title = `${timeStr} · ${MODES[mode].label} — Taskiner`;
+    return () => { document.title = prev; };
+  }, [running, timeStr, mode]);
 
   const dotsCount = sessions === 0 ? 0 : sessions % 4 === 0 ? 4 : sessions % 4;
 
@@ -311,7 +249,7 @@ export default function FocusPage() {
                               <span className="focus-task-item-text">{task.text}</span>
                               {task.deadline && (
                                 <span className="focus-task-item-date">
-                                  {new Date(task.deadline).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}
+                                  {formatDeadline(task.deadline)}
                                 </span>
                               )}
                             </button>
@@ -388,7 +326,7 @@ export default function FocusPage() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
               >
-                {mode === "work"
+                {finishedMode === "work"
                   ? `🎯 Sesja ukończona!${selectedTask ? ` · ${selectedTask.text.slice(0, 28)}${selectedTask.text.length > 28 ? "…" : ""}` : ""}`
                   : "✅ Przerwa skończona!"}
               </motion.div>

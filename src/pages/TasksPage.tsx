@@ -12,7 +12,6 @@ import MilestoneBanner     from "../components/MilestoneBanner";
 import PullToRefresh       from "../components/PullToRefresh";
 import CelebrationScreen   from "../components/CelebrationScreen";
 import MorningRitual       from "../components/MorningRitual";
-import TaskDetailSheet     from "../components/TaskDetailSheet";
 import EisenhowerMatrix    from "../components/EisenhowerMatrix";
 import WeeklyReview        from "../components/WeeklyReview";
 import { useStats }        from "../hooks/useStats";
@@ -20,6 +19,7 @@ import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useAndroidBack }  from "../hooks/useAndroidBack";
 import { useTaskStore }    from "../stores/useTaskStore";
 import { useUIStore }      from "../stores/useUIStore";
+import { toDateKey, isoWeekId, addDays } from "../utils/dateUtils";
 
 const MILESTONES = [1, 3, 5, 10, 15, 20];
 
@@ -29,7 +29,7 @@ const headerVariants = {
 };
 const headerItemVariant = {
   hidden:  { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: "easeOut" } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.32, ease: "easeOut" as const } },
 };
 
 function getGreeting(): string {
@@ -48,13 +48,13 @@ export default function TasksPage() {
   const [matrixView,      setMatrixView]      = useState(false);
 
   const [showMorning, setShowMorning] = useState(() => {
-    const todayKey = new Date().toISOString().slice(0, 10);
-    return localStorage.getItem("taskiner-morning-shown") !== todayKey;
+    return localStorage.getItem("taskiner-morning-shown") !== toDateKey(new Date());
   });
 
   const [showWeekly, setShowWeekly] = useState(() => {
     const now  = new Date();
-    const week = `${now.getFullYear()}-W${String(Math.ceil((now.getDate() - now.getDay() + 7) / 7)).padStart(2, "0")}`;
+    // The review covers the week that ends on Sunday → Monday morning still belongs to it
+    const week = isoWeekId(now.getDay() === 1 ? addDays(now, -1) : now);
     const day  = now.getDay();
     const hour = now.getHours();
     const inWindow = (day === 0 && hour >= 10) || (day === 1 && hour < 12);
@@ -62,20 +62,17 @@ export default function TasksPage() {
   });
   const handleWeeklyClose = () => {
     const now  = new Date();
-    const week = `${now.getFullYear()}-W${String(Math.ceil((now.getDate() - now.getDay() + 7) / 7)).padStart(2, "0")}`;
+    const week = isoWeekId(now.getDay() === 1 ? addDays(now, -1) : now);
     localStorage.setItem("taskiner-weekly-review", week);
     setShowWeekly(false);
   };
   const handleMorningClose = () => {
-    localStorage.setItem("taskiner-morning-shown", new Date().toISOString().slice(0, 10));
+    localStorage.setItem("taskiner-morning-shown", toDateKey(new Date()));
     setShowMorning(false);
   };
 
   const { distance, phase, onTouchStart, onTouchMove, onTouchEnd } = usePullToRefresh();
-  const selectedTaskId    = useUIStore((s) => s.selectedTaskId);
-  const setSelectedTaskId = useUIStore((s) => s.setSelectedTaskId);
 
-  useAndroidBack(() => setSelectedTaskId(null), selectedTaskId !== null);
   useAndroidBack(() => setAddOpen(false),        addOpen);
   useAndroidBack(() => setSearchOpen(false),     searchOpen);
   const userName          = useUIStore((s) => s.userName);
@@ -116,7 +113,8 @@ export default function TasksPage() {
         {showCelebration && (
           <CelebrationScreen
             key="celebration"
-            onClose={() => { setShowCelebration(false); clearCompleted(); }}
+            onClose={() => setShowCelebration(false)}
+            onClear={clearCompleted}
           />
         )}
       </AnimatePresence>
@@ -255,15 +253,6 @@ export default function TasksPage() {
         <AddTaskFAB isOpen={false} onClick={() => setAddOpen(true)} />
       )}
 
-      <AnimatePresence>
-        {selectedTaskId !== null && (
-          <TaskDetailSheet
-            key={selectedTaskId}
-            taskId={selectedTaskId}
-            onClose={() => setSelectedTaskId(null)}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 }

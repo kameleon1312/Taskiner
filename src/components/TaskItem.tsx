@@ -11,6 +11,10 @@ import { useCategoryStore } from "../stores/useCategoryStore";
 import { useUIStore }    from "../stores/useUIStore";
 import type { Task } from "../types";
 import { PRIORITY_CONFIG } from "../utils/constants";
+import { deadlineStatus, formatDeadline } from "../utils/deadline";
+import { playCompleteSound } from "../notifications/sound";
+import { toast } from "../notifications/toastStore";
+import { useMinuteClock } from "../hooks/useClock";
 
 const SWIPE_THRESHOLD = 75;
 
@@ -30,6 +34,8 @@ const TaskItem = React.memo(function TaskItem({
   const { toggleTask, deleteTask, toggleSubtask } = useTaskStore();
   const { categories }             = useCategoryStore();
   const setSelectedTaskId          = useUIStore((s) => s.setSelectedTaskId);
+  const soundEnabled               = useUIStore((s) => s.soundEnabled);
+  const soundVolume                = useUIStore((s) => s.soundVolume);
 
   const [justCompleted, setJustCompleted] = useState(false);
   const [expanded,      setExpanded]      = useState(false);
@@ -37,10 +43,7 @@ const TaskItem = React.memo(function TaskItem({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress    = useRef(false);
 
-  const completeSound  = useRef<HTMLAudioElement | null>(null);
-  const deadlineSound  = useRef<HTMLAudioElement | null>(null);
   const checkboxRef    = useRef<HTMLButtonElement>(null);
-  const alertPlayedRef = useRef(false);
 
   // Swipe motion values
   const x               = useMotionValue(0);
@@ -48,47 +51,20 @@ const TaskItem = React.memo(function TaskItem({
   const deleteOpacity   = useTransform(x, [-SWIPE_THRESHOLD, 0], [1, 0]);
 
   useEffect(() => {
-    const complete = new Audio("/sounds/complete.wav");
-    const deadline = new Audio("/sounds/deadline.wav");
-    complete.volume = 0.4;
-    deadline.volume = 0.35;
-    completeSound.current = complete;
-    deadlineSound.current = deadline;
-    return () => {
-      complete.pause();
-      complete.src = "";
-      deadline.pause();
-      deadline.src = "";
-    };
-  }, []);
-
-  useEffect(() => {
     return () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); };
   }, []);
 
-  // Deadline status
-  const today        = new Date();
-  const deadlineDate = task.deadline ? new Date(task.deadline) : null;
-  let statusColor    = "";
-  if (deadlineDate) {
-    if (deadlineDate.toDateString() === today.toDateString()) statusColor = "today";
-    else if (deadlineDate < today)                            statusColor = "overdue";
-    else                                                      statusColor = "upcoming";
-  }
+  useMinuteClock(); // re-evaluate status as time passes
+  // Deadline status (all-day aware, local time)
+  const status      = task.deadline && !task.completed ? deadlineStatus(task.deadline) : null;
+  const statusColor = status === "overdue" ? "overdue" : status === "today" || status === "soon" ? "today" : status ? "upcoming" : "";
 
-  useEffect(() => {
-    if (statusColor === "overdue" && !task.completed && !alertPlayedRef.current) {
-      try {
-        if (deadlineSound.current) {
-          deadlineSound.current.currentTime = 0;
-          deadlineSound.current.play();
-        }
-      } catch {
-        // autoplay blocked — ignore
-      }
-      alertPlayedRef.current = true;
-    }
-  }, [statusColor, task]);
+  const restoreTask = useTaskStore((s) => s.restoreTask);
+  const removeWithUndo = () => {
+    const snapshot = task;
+    deleteTask(task.id);
+    toast({ kind: "info", title: "Usunięto zadanie", body: snapshot.text, undo: () => restoreTask(snapshot), ttl: 5000 });
+  };
 
   const fireConfetti = () => {
     const rect = checkboxRef.current?.getBoundingClientRect();
@@ -135,12 +111,7 @@ const TaskItem = React.memo(function TaskItem({
       setJustCompleted(true);
       setTimeout(() => setJustCompleted(false), 650);
       navigator.vibrate?.(9);
-      try {
-        if (completeSound.current) {
-          completeSound.current.currentTime = 0;
-          completeSound.current.play();
-        }
-      } catch (e) {}
+      if (soundEnabled) playCompleteSound(Math.min(0.5, soundVolume));
     } else {
       navigator.vibrate?.(4);
     }
@@ -197,11 +168,11 @@ const TaskItem = React.memo(function TaskItem({
           position: "relative",
           zIndex: 1,
           "--priority-color": priorityConf.color,
-        } as React.CSSProperties}
+        } as unknown as React.CSSProperties}
         onDragStart={cancelLongPress}
         onDragEnd={(_, info) => {
           if (info.offset.x > SWIPE_THRESHOLD)       handleToggle();
-          else if (info.offset.x < -SWIPE_THRESHOLD) deleteTask(task.id);
+          else if (info.offset.x < -SWIPE_THRESHOLD) removeWithUndo();
         }}
         whileDrag={{ cursor: "grabbing" }}
       >
@@ -287,11 +258,8 @@ const TaskItem = React.memo(function TaskItem({
               )}
               {task.deadline && (
                 <span className={`deadline ${statusColor}`}>
-                  📅{" "}
-                  {new Date(task.deadline).toLocaleString("pl-PL", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
+                  {status === "overdue" ? "⚠︎" : status === "soon" ? "⏳" : "📅"}{" "}
+                  {formatDeadline(task.deadline)}
                 </span>
               )}
             </div>
@@ -326,7 +294,7 @@ const TaskItem = React.memo(function TaskItem({
           </motion.button>
           <motion.button
             className="remove"
-            onClick={(e) => { e.stopPropagation(); navigator.vibrate?.(12); deleteTask(task.id); }}
+            onClick={(e) => { e.stopPropagation(); navigator.vibrate?.(12); removeWithUndo(); }}
             whileHover={{ scale: 1.2 }}
             whileTap={{ scale: 0.9 }}
             title="Usuń zadanie"

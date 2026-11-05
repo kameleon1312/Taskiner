@@ -4,9 +4,11 @@ import confetti from "canvas-confetti";
 
 interface Props {
   onClose: () => void;
+  /** Optional: archive finished tasks (they stay in the journal & stats). */
+  onClear?: () => void;
 }
 
-export default function CelebrationScreen({ onClose }: Props) {
+export default function CelebrationScreen({ onClose, onClear }: Props) {
   useEffect(() => {
     confetti({
       particleCount: 160,
@@ -15,7 +17,7 @@ export default function CelebrationScreen({ onClose }: Props) {
       colors: ["#818cf8", "#34d399", "#fbbf24", "#ffffff", "#a78bfa"],
     });
     navigator.vibrate?.([50, 30, 80]);
-    const t = setTimeout(onClose, 3800);
+    const t = setTimeout(onClose, 6000);
     return () => clearTimeout(t);
   }, []);
 
@@ -45,7 +47,7 @@ export default function CelebrationScreen({ onClose }: Props) {
         </motion.div>
 
         <h2 className="celebration__title">Wszystko gotowe!</h2>
-        <p className="celebration__sub">Ukończyłeś wszystkie zadania na dziś. Niesamowita robota!</p>
+        <p className="celebration__sub">Lista czysta — wszystkie zadania ukończone. Niesamowita robota!</p>
 
         <motion.button
           className="celebration__btn"
@@ -57,6 +59,11 @@ export default function CelebrationScreen({ onClose }: Props) {
         >
           Świetnie! 🚀
         </motion.button>
+        {onClear && (
+          <button className="celebration__secondary" onClick={() => { onClear(); onClose(); }}>
+            Zarchiwizuj ukończone
+          </button>
+        )}
       </motion.div>
     </motion.div>
   );

@@ -18,7 +18,9 @@ export interface Task {
   id: number;
   text: string;
   completed: boolean;
+  /** "YYYY-MM-DD" (all-day) or "YYYY-MM-DDTHH:mm:ss" (local) — see utils/deadline.ts */
   deadline: string | null;
+  createdAt?: string;
   priority?: Priority;
   categoryId?: number | null;
   subtasks?: Subtask[];

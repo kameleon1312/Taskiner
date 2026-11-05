@@ -5,6 +5,13 @@ import { useCategoryStore } from "../stores/useCategoryStore";
 import SubtaskList from "./SubtaskList";
 import type { Priority, Recurring } from "../types";
 import { PRIORITY_CONFIG } from "../utils/constants";
+import { useUIStore } from "../stores/useUIStore";
+import { useActivityStore } from "../stores/useActivityStore";
+import { isAllDay, parseDeadline, makeDeadline, formatDeadline, deadlineStatus } from "../utils/deadline";
+import { toDateKey, addDays, fmtTime } from "../utils/dateUtils";
+import { googleCalendarUrl, tasksToICS, shareOrDownloadICS } from "../utils/ical";
+import { toast } from "../notifications/toastStore";
+import { ACTIVITY_META } from "./activity/ActivityTimeline";
 
 const RECURRING_OPTS: { value: Recurring | null; label: string }[] = [
   { value: null,      label: "Brak"        },
@@ -13,20 +20,21 @@ const RECURRING_OPTS: { value: Recurring | null; label: string }[] = [
   { value: "monthly", label: "🗓️ Miesięcz." },
 ];
 
-function toLocalDateStr(d: Date): string {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
+function splitDeadline(deadline: string | null | undefined): { date: string; time: string } {
+  if (!deadline) return { date: "", time: "" };
+  if (isAllDay(deadline)) return { date: deadline, time: "" };
+  const d = parseDeadline(deadline);
+  return { date: toDateKey(d), time: fmtHM(d) };
 }
 
-function toLocalTimeStr(d: Date): string {
-  return [
-    String(d.getHours()).padStart(2, "0"),
-    String(d.getMinutes()).padStart(2, "0"),
-  ].join(":");
-}
+const fmtHM = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+const QUICK_DATES: { label: string; days: number }[] = [
+  { label: "Dziś",       days: 0 },
+  { label: "Jutro",      days: 1 },
+  { label: "Za 3 dni",   days: 3 },
+  { label: "Za tydzień", days: 7 },
+];
 
 interface Props {
   taskId: number;
@@ -35,32 +43,31 @@ interface Props {
 
 export default function TaskDetailSheet({ taskId, onClose }: Props) {
   const task             = useTaskStore((s) => s.tasks.find((t) => t.id === taskId));
-  const { updateTaskFields, toggleTask, deleteTask } = useTaskStore();
+  const updateTaskFields = useTaskStore((s) => s.updateTaskFields);
+  const rescheduleTask   = useTaskStore((s) => s.rescheduleTask);
+  const toggleTask       = useTaskStore((s) => s.toggleTask);
+  const deleteTask       = useTaskStore((s) => s.deleteTask);
+  const restoreTask      = useTaskStore((s) => s.restoreTask);
+  const notifyOffsets    = useUIStore((s) => s.notifyOffsets);
+  const allDayTime       = useUIStore((s) => s.allDayTime);
+  const taskLog          = useActivityStore((s) => s.entries);
   const { categories }   = useCategoryStore();
 
   const [titleVal, setTitleVal] = useState(task?.text ?? "");
   const [notesVal, setNotesVal] = useState(task?.notes ?? "");
-  const [dateVal,  setDateVal]  = useState(() =>
-    task?.deadline ? toLocalDateStr(new Date(task.deadline)) : ""
-  );
-  const [timeVal, setTimeVal]   = useState(() =>
-    task?.deadline ? toLocalTimeStr(new Date(task.deadline)) : ""
-  );
+  const [dateVal,  setDateVal]  = useState(() => splitDeadline(task?.deadline).date);
+  const [timeVal,  setTimeVal]  = useState(() => splitDeadline(task?.deadline).time);
 
   // Sync if task id changes
   useEffect(() => {
     if (!task) return;
     setTitleVal(task.text);
     setNotesVal(task.notes ?? "");
-    if (task.deadline) {
-      const d = new Date(task.deadline);
-      setDateVal(toLocalDateStr(d));
-      setTimeVal(toLocalTimeStr(d));
-    } else {
-      setDateVal("");
-      setTimeVal("");
-    }
-  }, [taskId]);
+    const parts = splitDeadline(task.deadline);
+    setDateVal(parts.date);
+    setTimeVal(parts.time);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, task?.deadline]);
 
   // Close automatically if task is deleted
   useEffect(() => {
@@ -101,12 +108,8 @@ export default function TaskDetailSheet({ taskId, onClose }: Props) {
 
   const applyDeadline = (newDate: string, newTime: string) => {
     if (!task) return;
-    if (!newDate) {
-      updateTaskFields(task.id, { deadline: null });
-    } else {
-      const iso = `${newDate}T${newTime || "00:00"}:00`;
-      updateTaskFields(task.id, { deadline: iso });
-    }
+    // No time → all-day task (reminded at the configured morning hour)
+    rescheduleTask(task.id, newDate ? makeDeadline(newDate, newTime || null) : null);
   };
 
   if (!task) return null;
@@ -160,9 +163,7 @@ export default function TaskDetailSheet({ taskId, onClose }: Props) {
             <button
               className="sheet__share-btn"
               onClick={() => {
-                const deadline = task.deadline
-                  ? `\nTermin: ${new Date(task.deadline).toLocaleDateString("pl-PL")}`
-                  : "";
+                const deadline = task.deadline ? `\nTermin: ${formatDeadline(task.deadline)}` : "";
                 const notes = task.notes ? `\n\n${task.notes}` : "";
                 navigator.share({
                   title: "Taskiner – zadanie",
@@ -272,8 +273,55 @@ export default function TaskDetailSheet({ taskId, onClose }: Props) {
                 value={timeVal}
                 disabled={!dateVal}
                 onChange={(e) => { setTimeVal(e.target.value); applyDeadline(dateVal, e.target.value); }}
+                aria-label="Godzina (puste = cały dzień)"
               />
+              {timeVal && (
+                <button className="sheet__link-btn" onClick={() => { setTimeVal(""); applyDeadline(dateVal, ""); }}>
+                  Cały dzień
+                </button>
+              )}
             </div>
+            <div className="sheet__chips-row sheet__chips-row--tight">
+              {QUICK_DATES.map((q) => {
+                const key = toDateKey(addDays(new Date(), q.days));
+                return (
+                  <button
+                    key={q.label}
+                    className={`sheet__chip-btn${dateVal === key ? " active" : ""}`}
+                    onClick={() => { setDateVal(key); applyDeadline(key, timeVal); }}
+                  >
+                    {q.label}
+                  </button>
+                );
+              })}
+            </div>
+            {task.deadline && (
+              <p className={`sheet__deadline-hint sheet__deadline-hint--${task.completed ? "done" : deadlineStatus(task.deadline)}`}>
+                {formatDeadline(task.deadline)}
+                {isAllDay(task.deadline) ? ` · przypomnienie o ${allDayTime}` : ""}
+              </p>
+            )}
+            {task.deadline && (
+              <div className="sheet__cal-row">
+                <a
+                  className="sheet__cal-btn"
+                  href={googleCalendarUrl(task) ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span aria-hidden>📆</span> Google Calendar
+                </a>
+                <button
+                  className="sheet__cal-btn"
+                  onClick={async () => {
+                    const ics = tasksToICS([task], { categories, alarmOffsets: notifyOffsets, allDayTime, includeCompleted: true });
+                    await shareOrDownloadICS(ics, `taskiner-${task.id}.ics`);
+                  }}
+                >
+                  <span aria-hidden>⇪</span> Plik .ics
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="sheet__divider" />
@@ -324,10 +372,43 @@ export default function TaskDetailSheet({ taskId, onClose }: Props) {
 
           <div className="sheet__divider" />
 
+          {/* History of this task (from the activity journal) */}
+          {(() => {
+            const hist = taskLog.filter((e) => e.taskId === task.id && e.type !== "reminder").slice(-6).reverse();
+            if (!hist.length) return null;
+            return (
+              <>
+                <div className="sheet__section">
+                  <p className="sheet__label">Historia</p>
+                  <ul className="sheet__history">
+                    {hist.map((e) => (
+                      <li key={e.id}>
+                        <span className="sheet__history-icon">{ACTIVITY_META[e.type].icon}</span>
+                        <span className="sheet__history-text">
+                          {ACTIVITY_META[e.type].label}{e.detail ? ` · ${e.detail}` : ""}
+                        </span>
+                        <time>
+                          {new Date(e.at).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })} {fmtTime(new Date(e.at))}
+                        </time>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="sheet__divider" />
+              </>
+            );
+          })()}
+
           {/* Delete */}
           <button
             className="sheet__delete-btn"
-            onClick={() => { navigator.vibrate?.(18); deleteTask(task.id); onClose(); }}
+            onClick={() => {
+              navigator.vibrate?.(18);
+              const snapshot = task;
+              deleteTask(task.id);
+              onClose();
+              toast({ kind: "info", title: "Usunięto zadanie", body: snapshot.text, undo: () => restoreTask(snapshot), ttl: 5000 });
+            }}
           >
             🗑️ Usuń zadanie
           </button>

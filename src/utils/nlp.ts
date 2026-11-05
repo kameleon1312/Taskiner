@@ -1,4 +1,5 @@
 import type { Priority, Recurring } from "../types";
+import { toDateKey, toLocalISOString } from "./dateUtils";
 
 export interface NLPToken {
   type: "date" | "priority" | "recurring";
@@ -42,6 +43,16 @@ const MONTH: Record<string, number> = {
   grudzień: 11,
 };
 
+// ─── unicode word boundaries ──────────────────────────────────────────────────
+// JS `\b` treats Polish letters (ą, ę, ś, ż…) as non-word characters, so
+// "dziś" or "środę" never matched. Rewrite every pattern with Unicode-aware
+// look-arounds instead.
+const L = "[\\p{L}\\p{N}_]";
+function U(src: string, flags = "i"): RegExp {
+  const body = src.replace(/\\b/g, `(?:(?<!${L})(?=${L})|(?<=${L})(?!${L}))`);
+  return new RegExp(body, flags.includes("u") ? flags : flags + "u");
+}
+
 // ─── date helpers ─────────────────────────────────────────────────────────────
 
 function midnight(d: Date): Date {
@@ -72,9 +83,7 @@ function nextWeekday(idx: number): Date {
   return d;
 }
 
-function toYMD(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+const toYMD = toDateKey; // local calendar day (was UTC → off-by-one east of Greenwich)
 
 function dateLabel(d: Date): string {
   const today = new Date();
@@ -93,8 +102,8 @@ function dateLabel(d: Date): string {
 function matchDate(s: string): { date: Date; span: Span } | null {
   let m: RegExpExecArray | null;
 
-  const check = (re: RegExp, fn: (m: RegExpExecArray) => Date) => {
-    re.lastIndex = 0;
+  const check = (raw: RegExp, fn: (m: RegExpExecArray) => Date) => {
+    const re = U(raw.source, raw.flags);
     m = re.exec(s);
     if (m) return { date: fn(m), span: { start: m.index, end: m.index + m[0].length } };
     return null;
@@ -111,23 +120,21 @@ function matchDate(s: string): { date: Date; span: Span } | null {
     check(/\bza\s+(\d+)\s+(miesięcy|miesiące|miesiąca|miesiąc)\b/i, m => monthsFromNow(+m[1])) ||
     (() => {
       const days = Object.keys(WEEKDAY).join("|");
-      const re = new RegExp(`\\b(?:w\\s+|we\\s+)?(?:następn[yą]\\s+|przyszł[yą]\\s+)?(${days})\\b`, "i");
-      re.lastIndex = 0;
+      const re = U(`\\b(?:w\\s+|we\\s+)?(?:następn[yąe]\\s+|przyszł[yąe]\\s+)?(${days})\\b`, "i");
       m = re.exec(s);
       if (m) return { date: nextWeekday(WEEKDAY[m[1].toLowerCase()]), span: { start: m.index, end: m.index + m[0].length } };
       return null;
     })() ||
     (() => {
       const months = Object.keys(MONTH).join("|");
-      const re = new RegExp(`\\b(\\d{1,2})\\s+(${months})\\b`, "i");
-      re.lastIndex = 0;
+      const re = U(`\\b(\\d{1,2})\\s+(${months})\\b`, "i");
       m = re.exec(s);
       if (m) {
         const day = +m[1], mon = MONTH[m[2].toLowerCase()];
         const now = new Date();
         let yr = now.getFullYear();
         let d = new Date(yr, mon, day);
-        if (d < now) d = new Date(yr + 1, mon, day);
+        if (d < midnight(new Date(now))) d = new Date(yr + 1, mon, day);
         return { date: d, span: { start: m.index, end: m.index + m[0].length } };
       }
       return null;
@@ -135,7 +142,7 @@ function matchDate(s: string): { date: Date; span: Span } | null {
     check(/\b(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?\b/, m => {
       const day = +m[1], mon = +m[2] - 1, yr = m[3] ? +m[3] : new Date().getFullYear();
       const d = new Date(yr, mon, day);
-      if (!m[3] && d < new Date()) d.setFullYear(d.getFullYear() + 1);
+      if (!m[3] && d < midnight(new Date())) d.setFullYear(d.getFullYear() + 1);
       return d;
     }) ||
     null
@@ -145,8 +152,8 @@ function matchDate(s: string): { date: Date; span: Span } | null {
 function matchTime(s: string): { h: number; min: number; span: Span } | null {
   let m: RegExpExecArray | null;
 
-  const check = (re: RegExp, fn: (m: RegExpExecArray) => { h: number; min: number }) => {
-    re.lastIndex = 0;
+  const check = (raw: RegExp, fn: (m: RegExpExecArray) => { h: number; min: number }) => {
+    const re = U(raw.source, raw.flags);
     m = re.exec(s);
     if (m) return { ...fn(m), span: { start: m.index, end: m.index + m[0].length } };
     return null;
@@ -155,7 +162,8 @@ function matchTime(s: string): { h: number; min: number; span: Span } | null {
   return (
     check(/\bo\s+(\d{1,2})[.:h](\d{2})\b/i,       m => ({ h: +m[1], min: +m[2] })) ||
     check(/\bo\s+(\d{1,2})\s+rano\b/i,             m => ({ h: +m[1], min: 0 })) ||
-    check(/\bo\s+(\d{1,2})\s+wieczorem\b/i,        m => ({ h: +m[1], min: 0 })) ||
+    check(/\bo\s+(\d{1,2})\s+wieczorem\b/i,        m => ({ h: +m[1] < 12 ? +m[1] + 12 : +m[1], min: 0 })) ||
+    check(/\bo\s+(\d{1,2})\s+po\s+południu\b/i,   m => ({ h: +m[1] < 12 ? +m[1] + 12 : +m[1], min: 0 })) ||
     check(/\bo\s+(\d{1,2})\b/i,                    m => ({ h: +m[1], min: 0 })) ||
     check(/\bw\s+południe\b/i,                      () => ({ h: 12, min: 0 })) ||
     check(/\bpo\s+południu\b/i,                     () => ({ h: 14, min: 0 })) ||
@@ -170,8 +178,8 @@ function matchPriority(s: string): { priority: Priority; span: Span } | null {
   let m: RegExpExecArray | null;
   const lo = s.toLowerCase();
 
-  const check = (re: RegExp, p: Priority, src = lo) => {
-    re.lastIndex = 0;
+  const check = (raw: RegExp, p: Priority, src = lo) => {
+    const re = U(raw.source, raw.flags);
     m = re.exec(src);
     if (m) return { priority: p, span: { start: m.index, end: m.index + m[0].length } };
     return null;
@@ -192,8 +200,8 @@ function matchRecurring(s: string): { recurring: Recurring; span: Span } | null 
   let m: RegExpExecArray | null;
   const lo = s.toLowerCase();
 
-  const check = (re: RegExp, r: Recurring) => {
-    re.lastIndex = 0;
+  const check = (raw: RegExp, r: Recurring) => {
+    const re = U(raw.source, raw.flags);
     m = re.exec(lo);
     if (m) return { recurring: r, span: { start: m.index, end: m.index + m[0].length } };
     return null;
@@ -242,18 +250,20 @@ export function parseTaskInput(raw: string): NLPResult {
 
   // Date + time
   const dateMatch = matchDate(raw);
+  const rawTime   = matchTime(raw);
+  const validTime = rawTime && rawTime.h < 24 && rawTime.min < 60 ? rawTime : null;
   if (dateMatch) {
     spans.push(dateMatch.span);
-    const timeMatch = matchTime(raw);
+    const timeMatch = validTime;
     let timeStr = "";
     if (timeMatch) {
       spans.push(timeMatch.span);
       timeStr = `${String(timeMatch.h).padStart(2, "0")}:${String(timeMatch.min).padStart(2, "0")}`;
       const d = new Date(dateMatch.date);
       d.setHours(timeMatch.h, timeMatch.min, 0, 0);
-      deadline = d.toISOString();
+      deadline = toLocalISOString(d);
     } else {
-      deadline = `${toYMD(dateMatch.date)}T00:00:00.000Z`;
+      deadline = toYMD(dateMatch.date); // all-day
     }
     tokens.push({
       type: "date",
@@ -263,14 +273,16 @@ export function parseTaskInput(raw: string): NLPResult {
     });
   } else {
     // Time only → assume today
-    const timeMatch = matchTime(raw);
+    const timeMatch = validTime;
     if (timeMatch) {
       spans.push(timeMatch.span);
       const d = new Date();
       d.setHours(timeMatch.h, timeMatch.min, 0, 0);
-      deadline = d.toISOString();
+      // "o 9" said at 15:00 means tomorrow morning, not a reminder in the past
+      if (d.getTime() < Date.now() - 60_000) d.setDate(d.getDate() + 1);
+      deadline = toLocalISOString(d);
       const timeStr = `${String(timeMatch.h).padStart(2, "0")}:${String(timeMatch.min).padStart(2, "0")}`;
-      tokens.push({ type: "date", label: `📅 dzisiaj, ${timeStr}` });
+      tokens.push({ type: "date", label: `📅 ${dateLabel(midnight(new Date(d)))}, ${timeStr}` });
     }
   }
 

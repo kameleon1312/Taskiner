@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTaskStore }    from "../stores/useTaskStore";
 import { useCategoryStore } from "../stores/useCategoryStore";
-import { toDateKey } from "../utils/dateUtils";
+import { toDateKey, fromDateKey, DAY_MS } from "../utils/dateUtils";
 
 export interface DayStats {
   date: string;
@@ -56,7 +56,7 @@ export function useStats(): StatsData {
 
     const completedByDay = new Map<string, number>();
     completionLog.forEach((r) => {
-      const key = r.completedAt.slice(0, 10);
+      const key = toDateKey(new Date(r.completedAt)); // local day, not UTC
       completedByDay.set(key, (completedByDay.get(key) || 0) + 1);
     });
 
@@ -80,12 +80,12 @@ export function useStats(): StatsData {
     const sortedDates = Array.from(completedByDay.keys())
       .filter((k) => completedByDay.get(k)! > 0)
       .sort();
-    let longestStreak = streak;
+    let longestStreak = Math.max(streak, sortedDates.length > 0 ? 1 : 0);
     if (sortedDates.length > 0) {
       let run = 1;
       for (let i = 1; i < sortedDates.length; i++) {
-        const diff = Math.floor(
-          (new Date(sortedDates[i]).getTime() - new Date(sortedDates[i - 1]).getTime()) / 86400000
+        const diff = Math.round(
+          (fromDateKey(sortedDates[i]).getTime() - fromDateKey(sortedDates[i - 1]).getTime()) / DAY_MS
         );
         if (diff === 1) { run++; if (run > longestStreak) longestStreak = run; }
         else run = 1;
@@ -183,7 +183,7 @@ export function useStats(): StatsData {
     const dowTotals = new Array(7).fill(0);
     const dowWeekCounts = new Array(7).fill(0);
     completedByDay.forEach((count, dateKey) => {
-      const dow = new Date(dateKey).getDay();
+      const dow = fromDateKey(dateKey).getDay();
       dowTotals[dow] += count;
       dowWeekCounts[dow]++;
     });

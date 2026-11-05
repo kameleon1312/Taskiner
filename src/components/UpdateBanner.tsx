@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function UpdateBanner() {
   const [show, setShow] = useState(false);
+  const reloadRequested = useRef(false);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -19,9 +20,14 @@ export default function UpdateBanner() {
       if (reg.waiting) setShow(true);
     };
 
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
-    });
+    // First install also fires controllerchange (clientsClaim) — only an
+    // UPDATE of an already controlling worker should offer a refresh.
+    const hadController = !!navigator.serviceWorker.controller;
+    const onControllerChange = () => {
+      if (reloadRequested.current) window.location.reload();
+      else if (hadController) setShow(true);
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
     navigator.serviceWorker.ready.then((reg) => {
       reg.addEventListener("updatefound", () => {
@@ -36,12 +42,17 @@ export default function UpdateBanner() {
     });
 
     window.addEventListener("sw-update-available", handler as EventListener);
-    return () => window.removeEventListener("sw-update-available", handler as EventListener);
+    return () => {
+      window.removeEventListener("sw-update-available", handler as EventListener);
+      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+    };
   }, []);
 
   const handleUpdate = async () => {
+    reloadRequested.current = true;
     const reg = await navigator.serviceWorker.getRegistration();
-    reg?.waiting?.postMessage({ type: "SKIP_WAITING" });
+    if (reg?.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+    else window.location.reload(); // new worker already active (skipWaiting)
   };
 
   return (

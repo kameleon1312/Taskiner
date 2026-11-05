@@ -45,8 +45,8 @@ function SortableTaskItem({ task, index }: { task: Task; index: number }) {
       <TaskItem
         task={task}
         index={index}
-        dragHandleListeners={listeners as Record<string, unknown>}
-        dragHandleAttributes={attributes as Record<string, unknown>}
+        dragHandleListeners={listeners as unknown as Record<string, unknown>}
+        dragHandleAttributes={attributes as unknown as Record<string, unknown>}
       />
     </div>
   );

@@ -51,6 +51,23 @@
 
 ---
 
+## 🆕 Taskiner 3.0
+
+**Reminders that work in the background**
+- Schedule persisted in the service worker (IndexedDB) — survives the SW being stopped; late reminders are delivered on the next wake-up (page heartbeat, Periodic Background Sync, fetch, app start), each exactly once
+- Notification actions: **✔ Ukończ** and **⏰ Odłóż** (works even when the app is closed — queued and applied on next start)
+- Sound signal: 6 tones (Web Audio, offline) with preview & volume; vibration; quiet hours
+- All-day tasks remind at a chosen hour; daily plan, habit reminder, streak guard, Focus end
+- In-app toasts when the app is open, app-icon badge with today's + overdue count
+
+**Activity journal (`/activity`)** — every action (created, completed, rescheduled, deleted, habits, focus, reminders) on one timeline; filters, search, CSV export, restore deleted tasks
+
+**Calendar as the time hub** — month view with activity heat, priority dots, recurring projections, day panel (Plan / Dziennik), quick add for any day, 30-day agenda, swipe between months; **.ics export with alarms** (Google / Apple / Outlook), .ics import with round-trip updates, per-task "Google Calendar" link
+
+**Fixes** — local-time deadlines everywhere (no UTC off-by-one), all-day deadlines, Unicode-aware NLP (`dziś`, `środę`…), wall-clock Focus timer (no drift, keeps running across screens), stats day keys, recurring tasks never spawn in the past, back-button overlays, non-destructive celebration, full backup import/export
+
+---
+
 ## ⚡ Run Locally
 
 ```bash

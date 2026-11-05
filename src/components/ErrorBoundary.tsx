@@ -32,6 +32,8 @@ export default class ErrorBoundary extends React.Component<Props, State> {
         "taskiner-categories",
         "taskiner-focus-sessions",
         "taskiner-habits",
+        "taskiner-activity",
+        "taskiner-focus-timer",
       ].forEach((k) => localStorage.removeItem(k));
     } catch {
       // storage unavailable — proceed with reload anyway

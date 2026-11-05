@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Habit } from "../types";
 import { generateId } from "../utils/generateId";
+import { logActivity } from "./useActivityStore";
+import { todayKey, fromDateKey } from "../utils/dateUtils";
 
 interface HabitStore {
   habits: Habit[];
@@ -12,7 +14,7 @@ interface HabitStore {
 
 export const useHabitStore = create<HabitStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       habits: [],
       addHabit: (data) =>
         set((s) => ({
@@ -21,7 +23,14 @@ export const useHabitStore = create<HabitStore>()(
             { ...data, id: generateId(), createdAt: new Date().toISOString(), completions: [] },
           ],
         })),
-      toggleCompletion: (id, date) =>
+      toggleCompletion: (id, date) => {
+        const habit = get().habits.find((h) => h.id === id);
+        if (habit) {
+          const done = !habit.completions.includes(date);
+          // Retro-checks are dated to that day (noon) so the calendar shows them where they belong
+          const at = date === todayKey() ? undefined : new Date(fromDateKey(date).getTime() + 12 * 3600_000).toISOString();
+          logActivity({ type: done ? "habit_done" : "habit_undone", title: `${habit.emoji} ${habit.name}`, habitId: id, at });
+        }
         set((s) => ({
           habits: s.habits.map((h) =>
             h.id !== id
@@ -33,7 +42,8 @@ export const useHabitStore = create<HabitStore>()(
                     : [...h.completions, date],
                 }
           ),
-        })),
+        }));
+      },
       deleteHabit: (id) =>
         set((s) => ({ habits: s.habits.filter((h) => h.id !== id) })),
     }),

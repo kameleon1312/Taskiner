@@ -5,6 +5,8 @@ import { useCategoryStore } from "../stores/useCategoryStore";
 import { parseTaskInput } from "../utils/nlp";
 import type { Priority, Recurring } from "../types";
 import { PRIORITY_CONFIG } from "../utils/constants";
+import { makeDeadline } from "../utils/deadline";
+import { toDateKey } from "../utils/dateUtils";
 
 const PRIORITIES = (Object.keys(PRIORITY_CONFIG) as Priority[]).map((value) => ({
   value,
@@ -48,8 +50,8 @@ export default function TaskInput({ onSave }: Props) {
 
   const effectiveDeadline = (): string | null => {
     if (nlp.deadline) return nlp.deadline;
-    if (!date) return null;
-    return time ? `${date}T${time}:00` : `${date}T00:00:00`;
+    if (!date) return time ? makeDeadline(toDateKey(new Date()), time) : null;
+    return makeDeadline(date, time || null);
   };
 
   const handleAdd = () => {

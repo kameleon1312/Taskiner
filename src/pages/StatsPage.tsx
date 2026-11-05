@@ -4,6 +4,8 @@ import { useStats } from "../hooks/useStats";
 import type { CatDistItem } from "../hooks/useStats";
 import { useFocusStore } from "../stores/useFocusStore";
 import { useCategoryStore } from "../stores/useCategoryStore";
+import { useNavigate, Link } from "react-router-dom";
+import { toDateKey, fromDateKey } from "../utils/dateUtils";
 
 const fadeUp = (delay: number) => ({
   initial:    { opacity: 0, y: 14 },
@@ -92,6 +94,7 @@ function KpiCard({
 }
 
 function Heatmap12w({ data }: { data: Array<{ date: string; count: number }> }) {
+  const navigate = useNavigate();
   const rowLabels = ["Pn", "", "Śr", "", "Pt", "", "Nd"];
 
   const getLevel = (count: number): number => {
@@ -120,10 +123,14 @@ function Heatmap12w({ data }: { data: Array<{ date: string; count: number }> }) 
           {data.map((day, i) => {
             const lvl = getLevel(day.count);
             return (
-              <div
+              <button
                 key={i}
+                type="button"
                 className={`heatmap-12w__cell${lvl >= 0 ? ` heatmap-12w__cell--l${lvl}` : " heatmap-12w__cell--future"}`}
-                title={lvl >= 0 && day.count >= 0 ? `${day.date}: ${day.count}` : ""}
+                title={lvl >= 0 ? `${fromDateKey(day.date).toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}: ${day.count} ukończonych` : ""}
+                aria-label={lvl >= 0 ? `${day.date}: ${day.count} ukończonych` : undefined}
+                disabled={lvl < 0}
+                onClick={() => navigate(`/calendar?date=${day.date}`)}
               />
             );
           })}
@@ -144,7 +151,7 @@ function Heatmap12w({ data }: { data: Array<{ date: string; count: number }> }) 
 
 function WeeklyChart({ weeklyData }: { weeklyData: ReturnType<typeof useStats>["weeklyData"] }) {
   const maxVal = Math.max(...weeklyData.map((d) => d.count), 1);
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = toDateKey(new Date());
 
   return (
     <motion.div className="stats-section" {...fadeUp(0.35)}>
@@ -424,7 +431,8 @@ export default function StatsPage() {
           <h1 className="page-title" style={{ marginBottom: 4 }}>Statystyki</h1>
           {stats.activeDaysCount > 0 && (
             <p className="stats-page-header__sub">
-              {stats.activeDaysCount} aktywnych {stats.activeDaysCount === 1 ? "dzień" : "dni"} · {stats.totalCompleted} ukończonych
+              {stats.activeDaysCount} {stats.activeDaysCount === 1 ? "aktywny dzień" : "aktywnych dni"} · {stats.totalCompleted} ukończonych
+              {" · "}<Link to="/activity" className="stats-journal-link">Dziennik →</Link>
             </p>
           )}
         </motion.div>
